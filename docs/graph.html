@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Operon Interactive Canvas & Loop Architecture</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    :root {
+      --bg: #090d13;
+      --card-bg: #161b22;
+      --card-border: #30363d;
+      --text: #f0f6fc;
+      --text-muted: #8b949e;
+      --primary: #388bfd;
+      --accent-green: #238636;
+      --accent-purple: #8957e5;
+      --accent-amber: #d29922;
+      --accent-rose: #f85149;
+      --accent-cyan: #39c5cf;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f6f8fa;
+        --card-bg: #ffffff;
+        --card-border: #d0d7de;
+        --text: #1f2328;
+        --text-muted: #656d76;
+        --primary: #0969da;
+        --accent-green: #1a7f37;
+        --accent-purple: #8250df;
+        --accent-amber: #9a6700;
+        --accent-rose: #cf222e;
+        --accent-cyan: #0598ab;
+      }
+    }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+      user-select: none;
+    }
+    #canvas-container {
+      cursor: grab;
+      background-size: 24px 24px;
+      background-image: 
+        radial-gradient(circle, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+    }
+    #canvas-container.panning {
+      cursor: grabbing;
+    }
+    .node-card {
+      position: absolute;
+      cursor: grab;
+      user-select: none;
+      transition: box-shadow 0.2s ease, border-color 0.2s ease;
+      touch-action: none;
+      z-index: 10;
+    }
+    .node-card:active {
+      cursor: grabbing;
+      z-index: 20;
+    }
+    .node-card:hover {
+      box-shadow: 0 12px 28px -4px rgba(0, 0, 0, 0.45);
+    }
+    /* Animated dashed lines for feedback loops */
+    @keyframes dashLoop {
+      from { stroke-dashoffset: 40; }
+      to { stroke-dashoffset: 0; }
+    }
+    .loop-path {
+      stroke-dasharray: 6, 6;
+      animation: dashLoop 1.5s linear infinite;
+    }
+    .conn-label {
+      font-size: 9px;
+      font-family: monospace;
+      fill: var(--text-muted);
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body class="h-screen w-screen flex flex-col font-sans">
+
+  <!-- Top Navigation & Control Toolbar -->
+  <header class="h-16 px-6 bg-[var(--card-bg)] border-b border-[var(--card-border)] flex items-center justify-between z-30 shrink-0">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center font-mono font-bold text-blue-400 text-lg">
+        Ω
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-base font-bold text-[var(--text)] tracking-tight">Operon Canvas</h1>
+          <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-mono">Loop & Re-entrant Engine</span>
+          <span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 font-mono">Drag Nodes Freeform</span>
+        </div>
+        <p class="text-[11px] text-[var(--text-muted)]">Visual hierarchy with strict script ownership & cyclic session feedback loops</p>
+      </div>
+    </div>
+
+    <!-- Layout Switcher & Flow Filters -->
+    <div class="flex items-center gap-3">
+      <!-- Layout Orientation -->
+      <div class="flex items-center bg-[var(--bg)] p-1 rounded-xl border border-[var(--card-border)]">
+        <span class="text-[11px] font-semibold px-2 text-[var(--text-muted)]">Layout:</span>
+        <button onclick="applyLayout('horizontal')" id="btn-layout-h" class="layout-btn px-2.5 py-1 text-xs font-medium rounded-lg bg-blue-600 text-white">Horizontal (L➔R)</button>
+        <button onclick="applyLayout('vertical')" id="btn-layout-v" class="layout-btn px-2.5 py-1 text-xs font-medium rounded-lg text-[var(--text-muted)] hover:text-[var(--text)]">Vertical (T➔B)</button>
+        <button onclick="applyLayout('loop')" id="btn-layout-l" class="layout-btn px-2.5 py-1 text-xs font-medium rounded-lg text-[var(--text-muted)] hover:text-[var(--text)]">Session Loop ↻</button>
+      </div>
+
+      <!-- Flow Highlighting -->
+      <div class="flex items-center bg-[var(--bg)] p-1 rounded-xl border border-[var(--card-border)]">
+        <span class="text-[11px] font-semibold px-2 text-[var(--text-muted)]">Focus:</span>
+        <button onclick="filterFlow('all')" id="btn-flow-all" class="flow-btn px-2 py-1 text-xs font-medium rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30">All</button>
+        <button onclick="filterFlow('feature')" id="btn-flow-feature" class="flow-btn px-2 py-1 text-xs font-medium rounded-lg text-[var(--text-muted)] hover:text-[var(--text)]">Feature</button>
+        <button onclick="filterFlow('bug')" id="btn-flow-bug" class="flow-btn px-2 py-1 text-xs font-medium rounded-lg text-[var(--text-muted)] hover:text-[var(--text)]">Bug Fix</button>
+        <button onclick="filterFlow('loops')" id="btn-flow-loops" class="flow-btn px-2 py-1 text-xs font-medium rounded-lg text-[var(--text-muted)] hover:text-[var(--text)]">Loops Only ↻</button>
+        <button onclick="filterFlow('scripts')" id="btn-flow-scripts" class="flow-btn px-2 py-1 text-xs font-medium rounded-lg text-[var(--text-muted)] hover:text-[var(--text)]">Scripts</button>
+      </div>
+
+      <!-- Zoom Controls -->
+      <div class="flex items-center gap-1 bg-[var(--bg)] p-1 rounded-xl border border-[var(--card-border)]">
+        <button onclick="zoomCanvas(0.1)" class="w-7 h-7 flex items-center justify-center text-xs font-bold rounded-lg hover:bg-[var(--card-border)] text-[var(--text)]">+</button>
+        <button onclick="resetZoom()" class="px-2 h-7 flex items-center justify-center text-xs font-mono rounded-lg hover:bg-[var(--card-border)] text-[var(--text-muted)]" id="zoom-label">100%</button>
+        <button onclick="zoomCanvas(-0.1)" class="w-7 h-7 flex items-center justify-center text-xs font-bold rounded-lg hover:bg-[var(--card-border)] text-[var(--text)]">-</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Canvas Surface -->
+  <div id="canvas-container" class="flex-1 relative overflow-hidden">
+    <!-- Transform Wrapper for Pan & Zoom -->
+    <div id="canvas-world" class="absolute inset-0 origin-top-left" style="transform: matrix(1, 0, 0, 1, 0, 0);">
+      
+      <!-- SVG Connecting Arrows Layer -->
+      <svg id="svg-canvas" class="absolute inset-0 w-[5000px] h-[5000px] pointer-events-none" style="z-index: 5;">
+        <defs>
+          <!-- Arrow Markers -->
+          <marker id="arrow-default" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 8 5 L 0 9 z" fill="#8b949e" />
+          </marker>
+          <marker id="arrow-workflow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 8 5 L 0 9 z" fill="#388bfd" />
+          </marker>
+          <marker id="arrow-skill" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 8 5 L 0 9 z" fill="#238636" />
+          </marker>
+          <marker id="arrow-script" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 8 5 L 0 9 z" fill="#39c5cf" />
+          </marker>
+          <marker id="arrow-loop" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 8 5 L 0 9 z" fill="#d29922" />
+          </marker>
+          <marker id="arrow-bug" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 8 5 L 0 9 z" fill="#f85149" />
+          </marker>
+        </defs>
+        <g id="svg-paths"></g>
+      </svg>
+
+      <!-- Draggable Node Cards -->
+      <div id="nodes-container" class="relative w-[5000px] h-[5000px]">
+        <!-- Populated dynamically via JS -->
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Slide-out Node Inspector Drawer -->
+  <aside id="inspector" class="fixed inset-y-0 right-0 w-96 bg-[var(--card-bg)] border-l border-[var(--card-border)] shadow-2xl p-6 transform translate-x-full transition-transform duration-300 z-50 overflow-y-auto">
+    <div class="flex items-center justify-between pb-4 border-b border-[var(--card-border)] mb-5">
+      <div>
+        <span id="insp-badge" class="text-[10px] uppercase font-mono font-bold px-2 py-0.5 rounded">Category</span>
+        <h2 id="insp-title" class="text-lg font-bold text-[var(--text)] mt-1">Node Title</h2>
+      </div>
+      <button onclick="closeInspector()" class="p-1 rounded-lg text-[var(--text-muted)] hover:text-[var(--text)] hover:bg-[var(--card-border)]">
+        ✕
+      </button>
+    </div>
+
+    <div class="space-y-4 text-xs">
+      <div>
+        <h3 class="text-[10px] uppercase font-semibold text-[var(--text-muted)] tracking-wider">Purpose</h3>
+        <p id="insp-desc" class="mt-1 text-[var(--text)] leading-relaxed text-xs">...</p>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 p-2.5 rounded-lg bg-[var(--bg)] border border-[var(--card-border)] font-mono">
+        <div>
+          <span class="text-[9px] uppercase text-[var(--text-muted)] block">Discovery Tax</span>
+          <span id="insp-disc" class="font-semibold text-blue-400">~0 tok</span>
+        </div>
+        <div>
+          <span class="text-[9px] uppercase text-[var(--text-muted)] block">Active Context</span>
+          <span id="insp-active" class="font-semibold text-emerald-400">~0 tok</span>
+        </div>
+      </div>
+
+      <div>
+        <h3 class="text-[10px] uppercase font-semibold text-[var(--text-muted)] tracking-wider">Ownership & Hierarchy</h3>
+        <p id="insp-hierarchy" class="mt-1 font-mono text-cyan-400 bg-cyan-500/10 p-2 rounded border border-cyan-500/20 text-[11px]">...</p>
+      </div>
+
+      <div>
+        <h3 class="text-[10px] uppercase font-semibold text-[var(--text-muted)] tracking-wider">Re-entrant Feedback Loops</h3>
+        <div id="insp-loops" class="mt-1 text-[11px] text-amber-300/90 bg-amber-500/10 p-2 rounded border border-amber-500/20 leading-relaxed font-mono">
+          ...
+        </div>
+      </div>
+
+      <div>
+        <h3 class="text-[10px] uppercase font-semibold text-[var(--text-muted)] tracking-wider">Host Command / Invocation</h3>
+        <pre id="insp-exec" class="mt-1 p-2.5 rounded bg-black/50 border border-[var(--card-border)] text-[10px] font-mono text-cyan-300 overflow-x-auto">...</pre>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Application Logic -->
+  <script>
+    // 1. Core Ecosystem Nodes Definition
+    const NODES = [
+      // LAYER 1: GATEWAY & INGESTION
+      { id: 'node-intent', layer: 1, title: 'Natural Language Request', subtitle: 'User Prompt', type: 'entry', color: '#8957e5', w: 220, h: 80, disc: '0 tok', active: 'Varies', parent: 'User', loop: 'Re-enters on subsequent prompt in same session.', exec: 'Chat input ("implement X", "fix bug Y")' },
+      { id: 'node-gateway', layer: 1, title: 'Directive / MCP Gateway', subtitle: 'AGENTS.md & match_wf', type: 'gateway', color: '#8957e5', w: 230, h: 85, disc: '~150 tok', active: '0 tok', parent: 'Operon Root', loop: 'Matches intents re-entrantly per task turn.', exec: 'match_workflow(intent) / read AGENTS.md' },
+      { id: 'node-adaptive', layer: 1, title: 'Adaptive Scoping Gate', subtitle: 'Fast-Path & Trivial Bypass', type: 'gateway', color: '#d29922', w: 220, h: 85, disc: 'Embedded', active: '0 tok', parent: 'Directive Rule 1', loop: 'Bypasses pipelines for trivial changes (e.g. button color); jumps mid-phase for settled specs.', exec: 'Evaluated dynamically by LLM function call' },
+      { id: 'node-nudge', layer: 1, title: 'Contextual Nudge Engine', subtitle: 'Operating Rule 5 (Back-off)', type: 'gateway', color: '#d29922', w: 220, h: 85, disc: 'Embedded', active: '~25 tok', parent: 'Directive Rule 5', loop: 'Suggests relevant skill at response tail with strict 1-strike back-off to prevent nagging.', exec: 'Appends non-blocking suggestion at response tail' },
+
+      // LAYER 2: ADAPTIVE WORKFLOWS
+      { id: 'node-wf-feature', layer: 2, title: 'feature-delivery', subtitle: 'Align ➔ Build ➔ Close', type: 'workflow', color: '#388bfd', w: 240, h: 95, disc: '~98 tok', active: '~581 tok', parent: 'operon/workflows/', loop: 'If test fails in Phase 2 ➔ triggers Bug Fix loop!', exec: 'advance_workflow("feature-delivery", phase)' },
+      { id: 'node-wf-bug', layer: 2, title: 'bug-fix', subtitle: 'Repro ➔ Fix ➔ Close', type: 'workflow', color: '#f85149', w: 240, h: 95, disc: '~106 tok', active: '~561 tok', parent: 'operon/workflows/', loop: 'Loops hypothesis ➔ repro test until green.', exec: 'advance_workflow("bug-fix", phase)' },
+      { id: 'node-wf-audit', layer: 2, title: 'codebase-audit', subtitle: 'Map ➔ Scan ➔ Triage', type: 'workflow', color: '#8957e5', w: 240, h: 95, disc: '~109 tok', active: '~477 tok', parent: 'operon/workflows/', loop: 'Repeated periodically or post-refactor.', exec: 'advance_workflow("codebase-audit", phase)' },
+
+      // LAYER 3: ATOMIC SKILLS
+      { id: 'node-skill-grilling', layer: 3, title: 'grilling', subtitle: 'Frontier Decision-Tree', type: 'skill', color: '#d29922', w: 220, h: 85, disc: '~81 tok', active: '~469 tok', parent: 'operon/skills/grilling', loop: 'Batches questions in rounds until frontier empty.', exec: 'read_resource("okf://skills/grilling")' },
+      { id: 'node-skill-debug', layer: 3, title: 'systematic-debugging', subtitle: '6-Phase Scientific Loop', type: 'skill', color: '#f85149', w: 230, h: 90, disc: '~87 tok', active: '~639 tok', parent: 'operon/skills/systematic-debugging', loop: 'Mandatory RED test repro loop before code touch.', exec: 'read_resource("okf://skills/systematic-debugging")' },
+      { id: 'node-skill-tdd', layer: 3, title: 'tdd', subtitle: 'Seam-based Tracer Bullets', type: 'skill', color: '#238636', w: 220, h: 85, disc: '~70 tok', active: '~505 tok', parent: 'operon/skills/tdd', loop: 'Red ➔ Green ➔ Refactor continuous test cycle.', exec: 'read_resource("okf://skills/tdd")' },
+      { id: 'node-skill-ponytail', layer: 3, title: 'ponytail', subtitle: 'Lazy Senior Dev Anti-Bloat', type: 'skill', color: '#39c5cf', w: 230, h: 90, disc: '~76 tok', active: '~529 tok', parent: 'operon/skills/ponytail', loop: 'Active across all code-writing loops.', exec: 'read_resource("okf://skills/ponytail")' },
+      { id: 'node-skill-ui-audit', layer: 3, title: 'ui-visual-audit', subtitle: 'Layout & Viewport Bounds', type: 'skill', color: '#39c5cf', w: 220, h: 85, disc: '~83 tok', active: '~360 tok', parent: 'operon/skills/ui-visual-audit', loop: 'Inspects real-estate ratios (<15-18%), overlay bleeds, touch targets.', exec: 'read_resource("okf://skills/ui-visual-audit")' },
+      { id: 'node-skill-handoff', layer: 3, title: 'handoff', subtitle: 'Session Wrap-up Snapshot', type: 'skill', color: '#8b949e', w: 220, h: 85, disc: '~77 tok', active: '~408 tok', parent: 'operon/skills/handoff', loop: 'Session wrap-up & handoff serializer (exit-only).', exec: 'read_resource("okf://skills/handoff")' },
+
+      // LAYER 4: DETERMINISTIC SCRIPTS (Strictly parented to skills!)
+      { id: 'node-script-diff', layer: 4, title: 'diff-metrics', subtitle: 'Owner: ponytail', type: 'script', color: '#39c5cf', w: 210, h: 80, disc: '0 tok', active: '0 tok', parent: 'ponytail/scripts/diff-metrics', loop: 'Executed before each commit/close.', exec: 'powershell operon/skills/ponytail/scripts/diff-metrics.ps1' },
+      { id: 'node-script-debt', layer: 4, title: 'scan-debt', subtitle: 'Owner: ponytail', type: 'script', color: '#39c5cf', w: 210, h: 80, disc: '0 tok', active: '0 tok', parent: 'ponytail/scripts/scan-debt', loop: 'Executed during audits or cleanup turns.', exec: 'powershell operon/skills/ponytail/scripts/scan-debt.ps1' },
+      { id: 'node-script-helpers', layer: 4, title: 'find-helpers', subtitle: 'Owner: ponytail', type: 'script', color: '#39c5cf', w: 210, h: 80, disc: '0 tok', active: '0 tok', parent: 'ponytail/scripts/find-helpers', loop: 'Identifies single-use wrappers & dead code.', exec: 'powershell operon/skills/ponytail/scripts/find-helpers.ps1' },
+      { id: 'node-script-clean', layer: 4, title: 'clean-debug-logs', subtitle: 'Owner: systematic-debugging', type: 'script', color: '#f85149', w: 210, h: 80, disc: '0 tok', active: '0 tok', parent: 'systematic-debugging/scripts/clean-debug-logs', loop: 'Cleans scratch prints after green test.', exec: 'powershell operon/skills/systematic-debugging/scripts/clean-debug-logs.ps1' },
+      { id: 'node-tool-okf', layer: 4, title: 'validate-okf & tokens', subtitle: 'Meta Validators', type: 'script', color: '#238636', w: 210, h: 80, disc: '0 tok', active: '0 tok', parent: 'operon/tools/', loop: 'Continuous conformance verification.', exec: 'python operon/tools/validate-okf.py' }
+    ];
+
+    // 2. Strict Semantic Connections & Feedback Loops
+    const CONNECTIONS = [
+      // Forward Ingestion
+      { from: 'node-intent', to: 'node-gateway', type: 'flow', label: 'Prompt Evaluated' },
+      { from: 'node-gateway', to: 'node-adaptive', type: 'flow', label: 'Scope Check' },
+
+      // Adaptive Scoping Branches
+      { from: 'node-adaptive', to: 'node-wf-feature', type: 'workflow', label: 'Feature Intent' },
+      { from: 'node-adaptive', to: 'node-wf-bug', type: 'workflow', label: 'Bug Intent' },
+      { from: 'node-adaptive', to: 'node-wf-audit', type: 'workflow', label: 'Audit Intent' },
+      { from: 'node-adaptive', to: 'node-script-diff', type: 'script', label: 'Fast-Path Bypass (0 Tok)' },
+
+      // Feature Delivery Pipeline
+      { from: 'node-wf-feature', to: 'node-skill-grilling', type: 'workflow', label: 'Phase 1: Align' },
+      { from: 'node-skill-grilling', to: 'node-skill-tdd', type: 'workflow', label: 'Phase 2: Build' },
+      { from: 'node-wf-feature', to: 'node-skill-ponytail', type: 'workflow', label: 'Phase 2: Anti-Bloat' },
+      { from: 'node-wf-feature', to: 'node-skill-ui-audit', type: 'workflow', label: 'Phase 3: Visual Audit' },
+      { from: 'node-wf-feature', to: 'node-skill-handoff', type: 'workflow', label: 'Phase 3: Close' },
+
+      // Bug Fix Pipeline
+      { from: 'node-wf-bug', to: 'node-skill-debug', type: 'bug', label: 'Phase 1: Red Repro' },
+      { from: 'node-skill-debug', to: 'node-skill-tdd', type: 'bug', label: 'Phase 2: Fix & Verify' },
+      { from: 'node-wf-bug', to: 'node-skill-ponytail', type: 'bug', label: 'Phase 2: Minimal Diff' },
+      { from: 'node-wf-bug', to: 'node-skill-ui-audit', type: 'bug', label: 'Phase 2: Visual Regress Check' },
+      { from: 'node-wf-bug', to: 'node-skill-handoff', type: 'bug', label: 'Phase 3: Close' },
+
+      // Codebase Audit Pipeline
+      { from: 'node-wf-audit', to: 'node-skill-ponytail', type: 'workflow', label: 'Phase 1: Map' },
+      { from: 'node-wf-audit', to: 'node-script-debt', type: 'script', label: 'Phase 2: Scan' },
+      { from: 'node-wf-audit', to: 'node-script-helpers', type: 'script', label: 'Phase 2: Dedupe' },
+
+      // Strict Skill-to-Script Ownership Mapping
+      { from: 'node-skill-ponytail', to: 'node-script-diff', type: 'script', label: 'Parent Owner' },
+      { from: 'node-skill-ponytail', to: 'node-script-debt', type: 'script', label: 'Parent Owner' },
+      { from: 'node-skill-ponytail', to: 'node-script-helpers', type: 'script', label: 'Parent Owner' },
+      { from: 'node-skill-debug', to: 'node-script-clean', type: 'bug', label: 'Parent Owner' },
+
+      // ↻ RE-ENTRANT SESSION FEEDBACK LOOPS ↻
+      { from: 'node-wf-feature', to: 'node-wf-bug', type: 'loop', label: '↻ Broken Test in Feature ➔ Enters Bug Fix Loop' },
+      { from: 'node-skill-handoff', to: 'node-intent', type: 'loop', label: '↻ Session Handoff ➔ Re-enters next task in session' },
+      { from: 'node-nudge', to: 'node-intent', type: 'loop', label: '↻ Nudge accepted by user ➔ re-enters loop' }
+    ];
+
+    // 3. Layout Presets Definition
+    const LAYOUTS = {
+      horizontal: {
+        'node-intent': { x: 50, y: 180 },
+        'node-gateway': { x: 330, y: 180 },
+        'node-adaptive': { x: 620, y: 180 },
+        'node-nudge': { x: 620, y: 320 },
+
+        'node-wf-feature': { x: 920, y: 60 },
+        'node-wf-bug': { x: 920, y: 240 },
+        'node-wf-audit': { x: 920, y: 440 },
+
+        'node-skill-grilling': { x: 1240, y: 40 },
+        'node-skill-tdd': { x: 1240, y: 150 },
+        'node-skill-debug': { x: 1240, y: 260 },
+        'node-skill-ponytail': { x: 1240, y: 380 },
+        'node-skill-ui-audit': { x: 1240, y: 490 },
+        'node-skill-handoff': { x: 1240, y: 600 },
+
+        'node-script-diff': { x: 1550, y: 60 },
+        'node-script-clean': { x: 1550, y: 170 },
+        'node-script-debt': { x: 1550, y: 280 },
+        'node-script-helpers': { x: 1550, y: 390 },
+        'node-tool-okf': { x: 1550, y: 500 }
+      },
+      vertical: {
+        'node-intent': { x: 450, y: 50 },
+        'node-gateway': { x: 450, y: 170 },
+        'node-adaptive': { x: 450, y: 290 },
+        'node-nudge': { x: 740, y: 290 },
+
+        'node-wf-feature': { x: 150, y: 430 },
+        'node-wf-bug': { x: 450, y: 430 },
+        'node-wf-audit': { x: 750, y: 430 },
+
+        'node-skill-grilling': { x: 60, y: 600 },
+        'node-skill-tdd': { x: 280, y: 600 },
+        'node-skill-debug': { x: 500, y: 600 },
+        'node-skill-ponytail': { x: 720, y: 600 },
+        'node-skill-ui-audit': { x: 940, y: 600 },
+        'node-skill-handoff': { x: 1160, y: 600 },
+
+        'node-script-diff': { x: 150, y: 780 },
+        'node-script-clean': { x: 400, y: 780 },
+        'node-script-debt': { x: 650, y: 780 },
+        'node-script-helpers': { x: 900, y: 780 },
+        'node-tool-okf': { x: 1150, y: 780 }
+      },
+      loop: {
+        // Cyclic Circle representation showing re-entrancy
+        'node-intent': { x: 200, y: 250 },
+        'node-gateway': { x: 420, y: 100 },
+        'node-adaptive': { x: 700, y: 80 },
+        'node-wf-feature': { x: 1000, y: 150 },
+        'node-skill-tdd': { x: 1150, y: 320 },
+        'node-skill-ponytail': { x: 1100, y: 490 },
+        'node-skill-ui-audit': { x: 1000, y: 550 },
+        'node-wf-bug': { x: 860, y: 610 },
+        'node-skill-debug': { x: 600, y: 630 },
+        'node-skill-handoff': { x: 340, y: 520 },
+        'node-nudge': { x: 220, y: 390 },
+
+        'node-skill-grilling': { x: 760, y: 250 },
+        'node-wf-audit': { x: 500, y: 360 },
+        'node-script-diff': { x: 1350, y: 450 },
+        'node-script-clean': { x: 750, y: 740 },
+        'node-script-debt': { x: 1350, y: 560 },
+        'node-script-helpers': { x: 1350, y: 670 },
+        'node-tool-okf': { x: 50, y: 50 }
+      }
+    };
+
+    // Global Canvas State
+    let currentLayout = 'horizontal';
+    let currentFlow = 'all';
+    let scale = 1.0;
+    let panX = 40;
+    let panY = 40;
+    let isPanning = false;
+    let startPanX = 0;
+    let startPanY = 0;
+    let draggedNode = null;
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
+    const nodePositions = {};
+
+    // 4. Initialization
+    function init() {
+      // Set initial positions
+      Object.assign(nodePositions, JSON.parse(JSON.stringify(LAYOUTS.horizontal)));
+
+      // Render Nodes
+      const container = document.getElementById('nodes-container');
+      container.innerHTML = '';
+
+      NODES.forEach(n => {
+        const pos = nodePositions[n.id] || { x: 100, y: 100 };
+        const el = document.createElement('div');
+        el.id = n.id;
+        el.className = 'node-card p-3 rounded-xl bg-[var(--card-bg)] border border-[var(--card-border)] shadow-md select-none flex flex-col justify-between';
+        el.style.width = n.w + 'px';
+        el.style.height = n.h + 'px';
+        el.style.left = pos.x + 'px';
+        el.style.top = pos.y + 'px';
+        el.style.borderLeft = `4px solid ${n.color}`;
+
+        el.innerHTML = `
+          <div>
+            <div class="flex items-center justify-between mb-0.5">
+              <span class="text-[9px] font-mono uppercase font-bold tracking-wider" style="color: ${n.color}">${n.subtitle}</span>
+              <span class="text-[9px] font-mono text-[var(--text-muted)]">${n.disc}</span>
+            </div>
+            <div class="font-bold text-xs text-[var(--text)] truncate">${n.title}</div>
+          </div>
+          <div class="flex items-center justify-between text-[10px] text-[var(--text-muted)] pt-1 border-t border-[var(--card-border)]/50 mt-1">
+            <span class="truncate text-[9px]">${n.parent}</span>
+            <span class="text-[9px] text-blue-400 font-mono hover:underline cursor-pointer">inspect</span>
+          </div>
+        `;
+
+        // Node Dragging Listeners
+        el.addEventListener('pointerdown', (e) => onNodePointerDown(e, n.id));
+        el.addEventListener('click', (e) => {
+          if (!el.getAttribute('data-dragged')) {
+            inspectNode(n.id);
+          }
+        });
+
+        container.appendChild(el);
+      });
+
+      // Canvas Pan Listeners
+      const canvas = document.getElementById('canvas-container');
+      canvas.addEventListener('pointerdown', onCanvasPointerDown);
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', onPointerUp);
+      canvas.addEventListener('wheel', onWheel, { passive: false });
+
+      updateTransform();
+      renderConnections();
+    }
+
+    // 5. Connection Path Calculation with Quadratic Arcs for Loops
+    function renderConnections() {
+      const g = document.getElementById('svg-paths');
+      g.innerHTML = '';
+
+      CONNECTIONS.forEach(c => {
+        // Filter logic
+        if (currentFlow === 'feature' && !['node-intent','node-gateway','node-adaptive','node-wf-feature','node-skill-grilling','node-skill-tdd','node-skill-ponytail','node-skill-handoff','node-script-diff'].includes(c.from) && !['node-wf-feature'].includes(c.to)) return;
+        if (currentFlow === 'bug' && !['node-intent','node-gateway','node-adaptive','node-wf-bug','node-skill-debug','node-skill-tdd','node-skill-ponytail','node-skill-handoff','node-script-clean'].includes(c.from) && !['node-wf-bug'].includes(c.to)) return;
+        if (currentFlow === 'loops' && c.type !== 'loop') return;
+        if (currentFlow === 'scripts' && c.type !== 'script') return;
+
+        const fromNode = NODES.find(n => n.id === c.from);
+        const toNode = NODES.find(n => n.id === c.to);
+        const fromPos = nodePositions[c.from];
+        const toPos = nodePositions[c.to];
+
+        if (!fromNode || !toNode || !fromPos || !toPos) return;
+
+        let x1, y1, x2, y2, pathD;
+
+        if (c.type === 'loop') {
+          // Exaggerated curve arc for re-entrant feedback loops
+          x1 = fromPos.x + fromNode.w / 2;
+          y1 = fromPos.y + fromNode.h;
+          x2 = toPos.x + toNode.w / 2;
+          y2 = toPos.y + toNode.h;
+
+          // Arc through bottom canvas
+          const arcHeight = Math.max(Math.abs(x1 - x2) * 0.35, 120);
+          const midX = (x1 + x2) / 2;
+          const midY = Math.max(y1, y2) + arcHeight;
+
+          pathD = `M ${x1} ${y1} Q ${midX} ${midY} ${x2} ${y2}`;
+        } else {
+          // Standard Cubic Bezier between nodes
+          if (Math.abs(toPos.x - fromPos.x) >= Math.abs(toPos.y - fromPos.y)) {
+            // Horizontal connection
+            x1 = fromPos.x + fromNode.w;
+            y1 = fromPos.y + fromNode.h / 2;
+            x2 = toPos.x;
+            y2 = toPos.y + toNode.h / 2;
+            const dx = Math.abs(x2 - x1) * 0.5;
+            pathD = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+          } else {
+            // Vertical connection
+            x1 = fromPos.x + fromNode.w / 2;
+            y1 = fromPos.y + fromNode.h;
+            x2 = toPos.x + toNode.w / 2;
+            y2 = toPos.y;
+            const dy = Math.abs(y2 - y1) * 0.5;
+            pathD = `M ${x1} ${y1} C ${x1} ${y1 + dy}, ${x2} ${y2 - dy}, ${x2} ${y2}`;
+          }
+        }
+
+        // Color & Marker
+        let strokeColor = '#8b949e';
+        let marker = 'url(#arrow-default)';
+        let isLoop = false;
+
+        if (c.type === 'workflow') { strokeColor = '#388bfd'; marker = 'url(#arrow-workflow)'; }
+        else if (c.type === 'skill') { strokeColor = '#238636'; marker = 'url(#arrow-skill)'; }
+        else if (c.type === 'script') { strokeColor = '#39c5cf'; marker = 'url(#arrow-script)'; }
+        else if (c.type === 'bug') { strokeColor = '#f85149'; marker = 'url(#arrow-bug)'; }
+        else if (c.type === 'loop') { strokeColor = '#d29922'; marker = 'url(#arrow-loop)'; isLoop = true; }
+
+        const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        pathEl.setAttribute('d', pathD);
+        pathEl.setAttribute('stroke', strokeColor);
+        pathEl.setAttribute('stroke-width', isLoop ? '2.5' : '1.8');
+        pathEl.setAttribute('fill', 'none');
+        pathEl.setAttribute('marker-end', marker);
+        if (isLoop) {
+          pathEl.setAttribute('class', 'loop-path');
+        } else {
+          pathEl.setAttribute('opacity', '0.75');
+        }
+
+        g.appendChild(pathEl);
+      });
+    }
+
+    // 6. Node Dragging & Freeform Movement
+    function onNodePointerDown(e, id) {
+      e.stopPropagation();
+      draggedNode = id;
+      const el = document.getElementById(id);
+      el.removeAttribute('data-dragged');
+      const pos = nodePositions[id];
+      dragOffsetX = (e.clientX - panX) / scale - pos.x;
+      dragOffsetY = (e.clientY - panY) / scale - pos.y;
+    }
+
+    function onCanvasPointerDown(e) {
+      if (e.target.closest('.node-card')) return;
+      isPanning = true;
+      startPanX = e.clientX - panX;
+      startPanY = e.clientY - panY;
+      document.getElementById('canvas-container').classList.add('panning');
+    }
+
+    function onPointerMove(e) {
+      if (draggedNode) {
+        const el = document.getElementById(draggedNode);
+        el.setAttribute('data-dragged', 'true');
+        const newX = Math.round((e.clientX - panX) / scale - dragOffsetX);
+        const newY = Math.round((e.clientY - panY) / scale - dragOffsetY);
+
+        nodePositions[draggedNode] = { x: newX, y: newY };
+        el.style.left = newX + 'px';
+        el.style.top = newY + 'px';
+
+        renderConnections();
+      } else if (isPanning) {
+        panX = e.clientX - startPanX;
+        panY = e.clientY - startPanY;
+        updateTransform();
+      }
+    }
+
+    function onPointerUp() {
+      draggedNode = null;
+      isPanning = false;
+      document.getElementById('canvas-container').classList.remove('panning');
+    }
+
+    function onWheel(e) {
+      e.preventDefault();
+      const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
+      zoomCanvasAt(zoomFactor, e.clientX, e.clientY);
+    }
+
+    function zoomCanvasAt(factor, clientX, clientY) {
+      const newScale = Math.min(Math.max(scale * factor, 0.4), 2.2);
+      const mouseX = clientX - panX;
+      const mouseY = clientY - panY;
+
+      panX -= mouseX * (newScale / scale - 1);
+      panY -= mouseY * (newScale / scale - 1);
+      scale = newScale;
+
+      updateTransform();
+      document.getElementById('zoom-label').innerText = Math.round(scale * 100) + '%';
+    }
+
+    function zoomCanvas(delta) {
+      const newScale = Math.min(Math.max(scale + delta, 0.4), 2.2);
+      scale = newScale;
+      updateTransform();
+      document.getElementById('zoom-label').innerText = Math.round(scale * 100) + '%';
+    }
+
+    function resetZoom() {
+      scale = 1.0;
+      panX = 40;
+      panY = 40;
+      updateTransform();
+      document.getElementById('zoom-label').innerText = '100%';
+    }
+
+    function updateTransform() {
+      const world = document.getElementById('canvas-world');
+      world.style.transform = `matrix(${scale}, 0, 0, ${scale}, ${panX}, ${panY})`;
+    }
+
+    // 7. Layout Switching
+    function applyLayout(layoutKey) {
+      currentLayout = layoutKey;
+      const target = LAYOUTS[layoutKey];
+      if (!target) return;
+
+      document.querySelectorAll('.layout-btn').forEach(b => {
+        b.classList.remove('bg-blue-600', 'text-white');
+        b.classList.add('text-[var(--text-muted)]');
+      });
+      const activeBtn = document.getElementById('btn-layout-' + layoutKey[0]);
+      if (activeBtn) {
+        activeBtn.classList.remove('text-[var(--text-muted)]');
+        activeBtn.classList.add('bg-blue-600', 'text-white');
+      }
+
+      Object.keys(target).forEach(id => {
+        const p = target[id];
+        nodePositions[id] = { x: p.x, y: p.y };
+        const el = document.getElementById(id);
+        if (el) {
+          el.style.left = p.x + 'px';
+          el.style.top = p.y + 'px';
+        }
+      });
+
+      renderConnections();
+    }
+
+    // 8. Flow Filtering
+    function filterFlow(flowKey) {
+      currentFlow = flowKey;
+      document.querySelectorAll('.flow-btn').forEach(b => {
+        b.classList.remove('bg-blue-600/20', 'text-blue-400', 'border', 'border-blue-500/30');
+        b.classList.add('text-[var(--text-muted)]');
+      });
+      const activeBtn = document.getElementById('btn-flow-' + flowKey);
+      if (activeBtn) {
+        activeBtn.classList.remove('text-[var(--text-muted)]');
+        activeBtn.classList.add('bg-blue-600/20', 'text-blue-400', 'border', 'border-blue-500/30');
+      }
+      renderConnections();
+    }
+
+    // 9. Inspector Drawer
+    function inspectNode(id) {
+      const node = NODES.find(n => n.id === id);
+      if (!node) return;
+
+      const badge = document.getElementById('insp-badge');
+      badge.innerText = node.type;
+      badge.style.backgroundColor = node.color + '22';
+      badge.style.color = node.color;
+
+      document.getElementById('insp-title').innerText = node.title;
+      document.getElementById('insp-desc').innerText = `${node.title} (${node.subtitle}) operates within Layer ${node.layer} of Operon.`;
+      document.getElementById('insp-disc').innerText = node.disc;
+      document.getElementById('insp-active').innerText = node.active;
+      document.getElementById('insp-hierarchy').innerText = `Parent: ${node.parent}\nType: ${node.type}`;
+      document.getElementById('insp-loops').innerText = node.loop;
+      document.getElementById('insp-exec').innerText = node.exec;
+
+      document.getElementById('inspector').classList.remove('translate-x-full');
+    }
+
+    function closeInspector() {
+      document.getElementById('inspector').classList.add('translate-x-full');
+    }
+
+    // Run on load
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
