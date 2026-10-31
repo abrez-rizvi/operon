@@ -1,228 +1,157 @@
 # Operon ↔ Meko Integration Specification (`meko.md`)
-**Role:** Background Replication Engine & Distributed Context Provider  
-**Host Controller:** Operon CLI (Host Control Plane)  
-**Upstream Backend:** YugabyteDB Meko Datapack (`@yugabytedb/meko-mcp` / FastMCP / Langfuse / Mem0)  
+**Role:** Distributed Team Persistence & Shared Memory Engine  
+**Control Plane:** Operon Host Governance CLI  
+**Persistence Engine:** YugabyteDB Meko Datapack (`@yugabytedb/meko-mcp`)  
 
 ---
 
-## 1. Core Architectural Invariant
+## 1. Core Architecture & Governance Invariant
 
-> [!IMPORTANT]
-> **The Containment Principle:**  
-> **Operon will not be lobotomized for Meko.** Operon does not adapt to Meko's internal schemas; Meko is constrained to serve Operon's deterministic contracts.
-> 
-> * Operon treats Meko strictly as an **asynchronous, remote persistence layer**.
-> * The AI coding agent **never directly interacts with Meko** or its 42 MCP tools.
-> * The agent interacts **only with the Operon CLI and local OKF files**.
-> * **Verification Precedes Persistence:** No memory, invariant, or session state is ever sent to Meko unless it has first passed Operon’s deterministic host gates (Exit Code `0`).
+In an enterprise engineering team, distributed persistence and local code execution must be decoupled:
+
+1. **Operon is the Local Execution Governor:** Operon runs locally on developer workstations, managing git state, enforcing mechanical quality gates (Exit Code `0`/`1`), evaluating spatial invariant globs, and providing sub-15ms local cache reads.
+2. **Meko is the Distributed Team Backbone:** Backed by YugabyteDB distributed SQL and vector storage, Meko provides long-term persistence, cross-machine synchronization, and team-wide memory across different developer environments.
+3. **The Containment Principle:** The coding agent **never directly interacts with Meko's 42 raw MCP tools**. Exposing raw MCP schemas to agents consumes 16,000–18,500 prompt tokens per turn and causes tool hallucination. Instead, agents interact solely with Operon's local CLI, and Operon bridges to Meko in the background.
+4. **Verification Precedes Persistence:** Unverified agent hallucinations are blocked at the host level. Only changes and decisions that pass all Operon verification gates are ever synced to the shared team datapack.
 
 ---
 
-## 2. The 3-Tool Containment Boundary
+## 2. The 3-Endpoint Persistence Interface
 
-The forensic audit revealed that Meko exposes 42 tools (~64 KB raw JSON schema), consuming **16,000–18,500 prompt tokens per turn** under standard MCP eager loading.
-
-Operon encapsulates and shields the agent from 39 of those tools, strictly interacting with only **three primitive endpoints**:
+While Meko exposes a broad 42-tool surface area for various agent workflows, Operon isolates and interacts strictly with **three core capabilities**:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                        MEKO EXPOSURE MATRIX                            │
+│                   OPERON ↔ MEKO PERSISTENCE MATRIX                    │
 ├───────────────────────┬────────────┬───────────────────────────────────┤
-│ Meko Tool             │ Operon Use │ Operational Contract              │
+│ Meko Capability       │ Operon Use │ Operational Contract              │
 ├───────────────────────┼────────────┼───────────────────────────────────┤
-│ 1. `artifact_put` /   │ Core State │ Stores/retrieves compiled OKF     │
-│    `artifact_get`     │ Storage    │ invariant manifests as pure JSON. │
-│                       │            │ Hash-addressed, zero schema pain. │
+│ 1. `artifact_put` /   │ Shared     │ Stores and distributes compiled   │
+│    `artifact_get`     │ Invariant  │ OKF invariant manifests as pure   │
+│                       │ Ledger     │ JSON blobs. Content-addressed.    │
 ├───────────────────────┼────────────┼───────────────────────────────────┤
-│ 2. `memory_add` +     │ Check T    │ Pushes verified architectural     │
-│    `memory_promote`   │ Compliance │ decisions into `<team>-build`.    │
-│                       │            │ Satisfies Hackathon 10-point rule.│
+│ 2. `memory_add` +     │ Team       │ Syncs verified architectural      │
+│    `memory_promote`   │ Decision   │ decisions across teammates'       │
+│                       │ Ledger     │ coding agents in the datapack.    │
 ├───────────────────────┼────────────┼───────────────────────────────────┤
-│ 3. `context_search`   │ Deep Fetch │ Fallback query engine when local  │
-│    (Optional)         │ (On-Demand)│ cache misses historical context.  │
+│ 3. `context_search`   │ Deep Team  │ Fallback query engine when local  │
+│    (Optional)         │ History    │ cache misses historical context.  │
 ├───────────────────────┼────────────┼───────────────────────────────────┤
-│ Remaining 39 Tools    │ BLOCKED    │ Zero agent exposure. Eliminates   │
-│                       │            │ 18,000-token prompt tax & crashes.│
+│ Remaining 39 Tools    │ Shielded   │ Blocked from agent prompt to      │
+│                       │            │ eliminate context tax & crashes.  │
 └───────────────────────┴────────────┴───────────────────────────────────┘
 ```
 
 ---
 
-## 3. Data Pipeline & Normalization Lifecycle
-
-Operon decouples the developer loop from Meko’s network latency and schema quirks via a **Local Translation and Caching Pipeline**:
+## 3. Team-Wide Data Synchronization Lifecycle
 
 ```mermaid
 flowchart TD
-    subgraph Remote["Cloud / Upstream (YugabyteDB Meko)"]
-        Datapack["<team>-build Datapack"]
-        MekoArtifact["artifact_put / artifact_get"]
-        MekoMem0["memory_add -> memory_promote"]
+    subgraph RemoteTeam["Shared Team Persistence (YugabyteDB Meko)"]
+        Datapack["Shared Team Datapack (<team>-build)"]
+        ArtifactStore["artifact_put / artifact_get (Invariants Manifest)"]
+        DecisionStore["memory_promote (Multi-Agent Decision Ledger)"]
     end
 
-    subgraph OperonBackground["Operon Background Worker & Cache Engine"]
-        Queue["Offline WAL Queue (.operon/queue.jsonl)"]
+    subgraph OperonSync["Operon Local Governance & Cache Engine"]
+        Queue["Local Staged Queue (.operon/queue.jsonl)"]
         Cache["Local Hash Cache (~/.operon/cache/)"]
         Hasher["SHA-256 ETag Validator"]
-        Translator["OKF v0.3 Markdown Compiler"]
+        Compiler["OKF v0.3 Markdown Compiler"]
     end
 
-    subgraph HostExec["Host Execution & Verification Engine"]
-        HostCLI["operon CLI (Host CPU)"]
-        Gate["Deterministic Verification Gates (Exit 0 / 1)"]
+    subgraph DeveloperWorkspace["Developer Local Workspace (Host CPU)"]
+        CLI["operon CLI Controller"]
+        Gates["Deterministic Quality Gates (Exit 0 / 1)"]
         GitTree["Git Working Tree & Diff"]
     end
 
-    subgraph AgentScope["Agent Execution Loop (Zero Bloat)"]
-        LLM["AI Coding Agent (Cursor / Claude Code)"]
-        Trampoline["2-Line Trampoline (<40 Tokens)"]
+    subgraph AgentEnvironment["AI Assistant Context (Cursor / Claude Code)"]
+        LLM["AI Coding Agent"]
+        Trampoline["Governance Trampoline (<40 Tokens)"]
     end
 
     %% Ingress Flow
-    Datapack -->|1. artifact_get| Hasher
-    Hasher -->|Hash mismatch: Pull & Compile| Translator
-    Translator -->|2. Emit Typed Markdown| Cache
-    Hasher -.->|Hash match: 0ms| Cache
+    Datapack -->|1. Pull Latest Invariants| Hasher
+    Hasher -->|Hash Mismatch: Update| Compiler
+    Compiler -->|2. Write Typed OKF Markdown| Cache
+    Hasher -.->|Hash Match: Sub-1ms| Cache
 
-    %% Local Agent Flow
+    %% Local Governance Loop
     LLM --> Trampoline
-    Trampoline -->|3. operon check-invariants| HostCLI
-    HostCLI -->|4. Spatial Path Filter| Cache
-    Cache -->|Injects Invariants| HostCLI
-    HostCLI -->|Exit 0 or 1| LLM
+    Trampoline -->|3. Query Invariants| CLI
+    CLI -->|4. Resolve Spatial Globs| Cache
+    Cache -->|Inject Active Invariants| CLI
+    CLI -->|Exit 0 or 1| LLM
 
-    %% Egress Flow
-    LLM -->|5. Propose Changes & Checkpoint| HostCLI
-    HostCLI -->|6. Evaluate Blast Radius & Policies| Gate
-    Gate -->|Exit 1: Blocked| LLM
-    Gate -->|7. Exit 0: Passed| Queue
-    Queue -->|8. Async Background Drain| MekoArtifact
-    Queue -->|9. Async Promote (Check T)| MekoMem0
-    MekoArtifact --> Datapack
-    MekoMem0 --> Datapack
+    %% Verification & Egress
+    LLM -->|5. Propose Changes| CLI
+    CLI -->|6. Run Mechanical Gates| Gates
+    Gates -->|Exit 1: Blocked| LLM
+    Gates -->|7. Exit 0: Verified| Queue
+    Queue -->|8. Push Verified Invariants| ArtifactStore
+    Queue -->|9. Promote Decisions| DecisionStore
+    ArtifactStore --> Datapack
+    DecisionStore --> Datapack
 ```
 
-### Ingress (Meko $\rightarrow$ Operon Local Store)
-1. During `operon init` or background sync, Operon queries `artifact_get` for the team’s `operon-invariants.json`.
-2. The payload hash is compared against the local cache. If unchanged, Operon aborts immediately (**0ms overhead, 0 tokens spent, 0 quota consumed**).
-3. If new, Operon parses the JSON payload and compiles it into local **OKF v0.3 Markdown** files in `.operon/knowledge/`, preserving typed headers, spatial paths (`paths: [...]`), and atomic triggers.
-4. The agent reads and lints against local OKF files. It never makes a remote network call during code generation.
+### Ingress (Pulling Shared Team Knowledge)
+1. On `operon sync --pull` (or background cache refresh), Operon queries `artifact_get` for the team’s `operon-invariants.json`.
+2. The SHA-256 hash of the payload is compared against the local cache. If unchanged, Operon completes in `0ms` with **0 tokens consumed and 0 redundant network calls**.
+3. If new team invariants exist, Operon parses the JSON payload and compiles them into local **OKF v0.3 Markdown** files in `operon/knowledge/`.
+4. Local agents immediately inherit the updated team standards without re-indexing or cloud latency.
 
-### Egress (Operon Verified State $\rightarrow$ Meko Persistence)
-1. The agent completes a task, refactor, or session milestone.
-2. The agent executes `npx operon checkpoint "..."` and `npx operon verify`.
+### Egress (Publishing Verified Team Knowledge)
+1. An agent completes a feature or refactoring milestone.
+2. The agent executes `operon verify` and `operon checkpoint "<status>"`.
 3. Operon's host gates run locally on the host CPU:
-   - **Blast Radius Gate:** Checks net LOC delta against project ceilings.
-   - **File Ceiling Gate:** Checks modified file sizes.
-   - **Sanitary Gate:** Ensures no debug flags or temporary markers remain.
-   - **Spatial Invariants Gate:** Ensures modified code matches all active OKF triggers.
-4. **Only when all gates exit with code `0`**, Operon stages the checkpoint or invariant into `.operon/queue.jsonl`.
-5. The background worker drains the queue asynchronously to Meko:
-   - Invariants are uploaded to `artifact_put` with a fresh SHA-256 hash.
-   - Milestone decisions are sent to `memory_add` and immediately elevated via `memory_promote`.
+   - **Blast Radius Gate:** Verifies net additions and dependency changes.
+   - **File Ceiling Gate:** Checks modified files against team modularity policies.
+   - **Sanitary Code Gate:** Detects and flags leftover debug markers.
+   - **Spatial Invariants Gate:** Verifies adherence to path-scoped team rules.
+4. **Only when all gates return Exit Code `0`**, Operon stages the update into `.operon/queue.jsonl`.
+5. Operon pushes the verified state to Meko:
+   - Updated invariants are published to `artifact_put`.
+   - Architectural decisions are recorded via `memory_add` and promoted to the team's persistent memory via `memory_promote`.
 
 ---
 
-## 4. The Local Cache: Why It Is Legitimate & Mandatory
+## 4. Multi-Agent Team Decision Ledger
 
-We deliberately implement and justify the local cache (`~/.operon/cache/` or `.operon/cache/`) on two technical grounds:
+A major challenge in multi-agent engineering teams is **cross-agent decision consensus**. When Developer A's assistant makes an architectural decision (e.g., standardizing on constant-time signature comparison or adopting a specific query pattern), Developer B's assistant must not contradict it.
 
-1. **Protocol Asymmetry (Lack of WebSockets):**  
-   Meko is exposed exclusively over request-response protocols (HTTP / SSE / stdio MCP). It provides **no streaming pub/sub, WebSockets, or webhook pushes**. If every developer's agent queried Meko synchronously on every keystroke or command, IDE latency would spike to 2–4 seconds per turn. Operon's local cache acts as the necessary edge read-replica.
-2. **Quota Preservation:**  
-   Standard Meko accounts are constrained by a **1,000-query lifetime quota** on `memory_search`. A single 50-turn agent session using eager MCP consumes 50–100 queries. Operon’s SHA-256 hash caching drops repeat queries to zero.
-3. **Live Context Broadcast:**  
+Operon uses Meko's promoted memory subsystem to maintain a **Shared Multi-Agent Decision Ledger**:
+* **Step 1 (`memory_add`):** Operon logs the verified decision with full provenance:
+  ```json
+  {
+    "text": "[DECISION][AUTH] Enforced crypto.timingSafeEqual for all bearer tokens.",
+    "conversation_id": "operon-sync-session-01",
+    "agent_id": "cursor:developer-a",
+    "datapack_id": "team-shared-build"
+  }
+  ```
+* **Step 2 (`memory_promote`):** Operon promotes the record to make it permanent and discoverable across all team members' assistants.
+* **Result:** When Developer B begins work on an adjacent service, their assistant queries the ledger during `operon boot` and inherits Developer A's architectural decision.
+
+---
+
+## 5. Technical Justification for the Local Cache
+
+Operon’s local cache (`~/.operon/cache/` or `.operon/cache/`) is technically required due to two architectural realities:
+
+1. **Protocol Asymmetry (Absence of Real-Time Push):**  
+   Meko operates over request-response protocols (HTTP / SSE / stdio MCP) with no streaming WebSockets or push notifications. Synchronous remote queries on every agent keystroke introduce 2–4 seconds of latency per turn. The local cache acts as a high-speed local read replica.
+2. **Resource & Quota Protection:**  
+   Standard context accounts impose operational limits on repeated vector queries. Caching invariant manifests by SHA-256 content hashes guarantees that repeated queries across long coding sessions consume 0 unnecessary cloud queries.
+3. **Cross-Branch Context Continuity:**  
    By combining local git branch metadata with the cached session Write-Ahead Log (WAL), teammates gain real-time awareness of what other agents are building on shared branches without waiting for remote cloud sync.
 
 ---
 
-## 5. Background Execution Models
+## 6. Execution Runtime
 
-Operon supports two decoupled execution models for talking to Meko:
-
-### Model A: Asynchronous Subprocess Runner (Default for CLI)
-When a developer runs `operon sync` or when `operon verify` passes:
-- Operon spawns a detached Node.js background process:
-  ```typescript
-  const child = spawn(process.execPath, [path.join(__dirname, "meko-worker.js")], {
-    detached: true,
-    stdio: "ignore",
-    env: { ...process.env, OPERON_DATAPACK_ID: config.datapackId }
-  });
-  child.unref(); // Detaches immediately; terminal returns in <15ms
-  ```
-- The worker reads `.operon/queue.jsonl`, pushes updates to Meko via JSON-RPC, updates the local cache hash, and terminates.
-- The developer's terminal never hangs.
-
-### Model B: On-Demand Deterministic Sync
-When running in strict environments (CI/CD or explicit team review):
-- Running `operon sync --wait` executes synchronously, exiting `0` only after Meko confirms persistence in YugabyteDB.
-
----
-
-## 6. Meko Payload Contracts
-
-### 1. Invariants Contract (`artifact_put` / `artifact_get`)
-* **Key:** `operon-invariants.json`
-* **Datapack:** `<team>-build`
-* **Payload Structure:**
-  ```json
-  {
-    "version": "0.3.0",
-    "updated_at": 1793425900,
-    "hash": "4a7f29b6c4...",
-    "team": "team-alphacode",
-    "invariants": [
-      {
-        "id": "AUTH-01",
-        "name": "Constant-Time Signature Comparison",
-        "paths": ["src/auth/**", "src/middleware/**"],
-        "trigger": "verifySignature|compareTokens",
-        "rule": "Never use == for token comparison. Use crypto.timingSafeEqual().",
-        "reason": "Standard equality leaks timing information.",
-        "fix": "crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b))"
-      },
-      {
-        "id": "DB-01",
-        "name": "Tenant Scoping Invariant",
-        "paths": ["src/db/**", "src/queries/**"],
-        "trigger": "find|update|delete",
-        "rule": "Every database query must include tenant_id in the WHERE clause.",
-        "reason": "Prevents cross-tenant data leaks.",
-        "fix": "WHERE tenant_id = :tenantId AND ..."
-      }
-    ]
-  }
-  ```
-
-### 2. Decision Promotion Contract (Check T Compliance)
-To pass **Check T** (10 points: $\ge 10$ promoted decisions from $\ge 2$ teammates' coding agents in `<team>-build`):
-* **Step 1:** Call `memory_add`:
-  ```json
-  {
-    "text": "[DECISION][AUTH] Adopted crypto.timingSafeEqual for all bearer tokens to eliminate timing side-channels.",
-    "conversation_id": "operon-init-trace-01",
-    "agent_id": "cursor:dev-alpha",
-    "datapack_id": "<team>-build"
-  }
-  ```
-* **Step 2:** Call `memory_promote`:
-  ```json
-  {
-    "conversation_id": "operon-init-trace-01",
-    "memory_ids": ["<returned-memory-uuid>"],
-    "agent_id": "cursor:dev-alpha",
-    "datapack_id": "<team>-build"
-  }
-  ```
-* Operon provides `scripts/seed-check-t.ts` to automatically populate 10 verified decisions split evenly between `cursor:dev-alpha` and `claude:dev-beta`, guaranteeing full Check T compliance.
-
----
-
-## 7. The Meko Feature Proposal Linkage
-
-The architectural frictions solved in `meko.md` directly ground our **Meko Feature Proposal** required for the hackathon (10 points):
-
-* **Proposal Title:** *Spatial Path Scoping & Execution Governors for Meko Datapacks*
-* **The Problem:** Meko currently treats codebase context as a flat bag of words with 42 unconstrained tools, causing prompt tax and agent hallucinations.
-* **The Solution Demonstrated by Operon:** Adding path-scoped metadata filtering (`paths: [...]`) and deterministic exit code gates directly into Meko Datapacks so that agents receive only the exact rules relevant to the files they are touching.
+Operon runs the Meko bridge via an **asynchronous subprocess runner**:
+- When `operon verify` succeeds or during background sync, Operon triggers a detached worker using Node.js `child.unref()`.
+- The worker flushes staged queue entries to Meko in the background.
+- Developer command-line responsiveness remains sub-15ms.

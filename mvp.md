@@ -1,215 +1,163 @@
-# Operon Hackathon MVP Specification
-**Target Hackathon:** hackCBS 9.0 (Meko Track A: "Build AI that remembers")  
-**Core Thesis:** Operon is the deterministic host control plane and execution governor that turns Meko into a reliable, zero-bloat enterprise backend.  
-**Decoupling Principle:** *Operon will not be lobotomized for Meko.* Operon controls local verification, spatial scoping, and deterministic gates; Meko provides long-term distributed persistence across teammates.
+# Operon MVP Specification
+**Definition:** The Team-Wide AI Governance Control Plane & Shared Execution Standard  
+**Target Architecture:** Cross-Agent Developer CLI + Distributed Team Persistence (YugabyteDB Meko)  
+**Core Mission:** Eliminate behavioral divergence, tribal amnesia, and prompt tax across engineering teams by enforcing shared engineering playbooks, deterministic verification gates, and path-scoped codebase memory.
 
 ---
 
-## 1. Executive Summary & Architectural Invariant
+## 1. The Core Problem: The AI Governance Crisis in Software Teams
 
-Meko is an enterprise distributed memory backend powered by YugabyteDB, but exposing its 42 raw MCP tools directly to coding agents burns **16,000–18,500 tokens per turn** and provides only passive advice with zero host awareness.
+Modern software engineering teams rarely standardize on a single AI coding tool. Engineers across an organization freely choose between Cursor, Claude Code, GitHub Copilot, Codex, and custom CLI agents. This heterogeneity creates a severe governance crisis:
 
-Operon acts as the **Verification Gatekeeper and Execution Governor**:
-1. **Agent interacts solely with Operon:** The agent sees only a <40-token trampoline and runs host CLI commands (`npx operon ...`).
-2. **Operon imports and translates from Meko:** Meko datapack records are pulled into Operon's local typed OKF store and hash-cached.
-3. **Deterministic Host Verification First:** No unverified agent hallucination ever touches Meko. An invariant, decision, or session state must pass Operon's local mechanical gates (exit code `0`) before being synced.
-4. **Local Hash Cache as Real-Time Sync:** Because Meko has no WebSockets or push notifications, Operon’s local cache (~/.operon) manages instant local reads, delta tracking, and shared live context across team branches while protecting Meko's 1,000-query quota.
+1. **Behavioral Divergence & Review Fatigue:** Every engineer prompts their assistant differently. Without centralized governance, agents introduce conflicting abstractions, import redundant packages for trivial utilities, and ignore team architectural standards. Senior engineers burn exhausting review cycles policing repetitive, unverified AI code.
+2. **The Prompt Tax & Context Firehose:** Teams attempt to enforce standards by dumping massive markdown rulebooks into global system prompts (`.cursorrules`, `CLAUDE.md`). This wastes tens of thousands of tokens per turn, degrades model reasoning, and causes instruction drift mid-session.
+3. **Tribal Amnesia:** When Developer A fixes an obscure token timing bug in Cursor, Developer B working on Claude Code introduces the exact same bug two hours later. Critical codebase boundaries remain trapped in local chats or senior engineers' heads.
+4. **Passive Advice vs. Deterministic Enforcement:** Existing context engines only provide passive natural language advice. Coding agents routinely ignore markdown guidelines because there are no mechanical exit codes (`0` pass, `1` fail) running on the host machine to block non-compliant diffs.
 
 ---
 
-## 2. Selected MVP Feature Matrix (from SPEC.md)
+## 2. Operon’s Solution: Team-Wide AI Governance
 
-We ruthlessly select five core features from `SPEC.md` that showcase Operon's value, satisfy all hackathon rubrics, and deliver a clean 5-minute demo:
+Operon provides a unified host-side control plane that acts as the **single source of truth and execution governor** for all AI coding agents in a team:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                        OPERON MVP CORE ENGINE                          │
+│                   OPERON TEAM GOVERNANCE ARCHITECTURE                  │
 ├──────────────────────────┬─────────────────────────────────────────────┤
-│ Feature                  │ Role in MVP                                 │
+│ Governance Pillar        │ How Operon Enforces It                      │
 ├──────────────────────────┼─────────────────────────────────────────────┤
-│ 1. Harness Trampoline    │ Injects <40-token router into .cursorrules, │
-│    (`operon init`)       │ CLAUDE.md, and AGENTS.md.                   │
+│ 1. Universal Harness     │ Injects a uniform <40-token router into all │
+│    Standard (`init`)     │ editor configs (Cursor, Claude Code, etc.)  │
 ├──────────────────────────┼─────────────────────────────────────────────┤
-│ 2. Deterministic Gate    │ Evaluates git diff, file line ceiling, and  │
-│    (`operon verify`)     │ unapproved dependencies. Exits 0 or 1.      │
+│ 2. Deterministic Quality │ Host-side CPU gates that evaluate git diff, │
+│    Gates (`verify`)      │ blast radius, file ceilings, and clean code │
 ├──────────────────────────┼─────────────────────────────────────────────┤
-│ 3. Spatial OKF Ledgers   │ Evaluates git-modified paths against        │
-│    (`check-invariants`)  │ `paths: [...]` globs. Zero token firehose.  │
+│ 3. Spatial Invariant     │ Scopes team knowledge strictly to active    │
+│    Ledger (`invariants`) │ file paths (`paths: [...]`). Zero bloat.    │
 ├──────────────────────────┼─────────────────────────────────────────────┤
-│ 4. Continuous WAL Delta  │ Appends micro-deltas to session state every │
-│    (`operon checkpoint`) │ 2-3 turns without full-file rewrites.       │
+│ 4. Cross-Agent Session   │ Continuous Write-Ahead Log (WAL) tracking   │
+│    Continuity (`session`)│ work in-flight across team branches.        │
 ├──────────────────────────┼─────────────────────────────────────────────┤
-│ 5. Meko Verification Hub │ Pulls into local cache; pushes ONLY         │
-│    (`operon sync`)       │ verified invariants to Meko Datapack.       │
+│ 5. Distributed Team      │ Syncs verified invariants and architectural │
+│    Persistence (`sync`)  │ decisions to shared YugabyteDB persistence. │
 └──────────────────────────┴─────────────────────────────────────────────┘
 ```
 
 ---
 
-## 3. The Data Flow & State Machine
+## 3. The 5-Feature MVP Scope
+
+For the production MVP, Operon focuses on five foundational capabilities that establish end-to-end team governance:
+
+### Feature 1: Universal Harness Onboarding (`operon init`)
+- Scans the repository for installed agent harnesses (`.cursorrules`, `CLAUDE.md`, `AGENTS.md`).
+- Injects a standardized, non-invasive 2-line governance trampoline:
+  ```markdown
+  <!-- OPERON GOVERNANCE TRAMPOLINE START -->
+  Before modifying code, query path-scoped team invariants: `npx operon check-invariants`
+  Before marking tasks complete, enforce team verification gates: `npx operon verify`
+  <!-- OPERON GOVERNANCE TRAMPOLINE END -->
+  ```
+- Guarantees all developers' assistants operate under the same operational protocol with `<40` prompt tokens of overhead.
+
+### Feature 2: Deterministic Mechanical Gates (`operon verify`)
+- Executes on the host CPU in `<15ms`.
+- **Gate A (Blast Radius & Package Audit):** Verifies net lines added and blocks unapproved external package manifest additions.
+- **Gate B (File Line Ceiling Policy):** Enforces team modularity policies against runaway monolithic file accretion.
+- **Gate C (Sanitary Code Enforcement):** Scans git diffs to detect and block temporary debug markers (`console.log`, `debugger`, scratch instrumentation).
+- **Exit Codes:** Returns `0` for clean code or `1` with actionable failure diffs, mechanically blocking unverified AI commits.
+
+### Feature 3: Spatial OKF Invariant Ledgers (`operon check-invariants`)
+- Evaluates uncommitted changes against typed Open Knowledge Format (OKF v0.3) ledgers stored in `operon/knowledge/*.md`.
+- **Spatial Path Scoping (`paths: [...]`):** Instead of dumping the entire repository knowledge base into the LLM, Operon dynamically matches the files touched in `git diff` against path glob patterns.
+- Evaluates AST/regex triggers. Exits `1` if an agent introduces a known anti-pattern (e.g., using `==` for cryptographic signatures or omitting tenant isolation filters).
+
+### Feature 4: Continuous Write-Ahead Session WAL (`operon checkpoint` / `operon session`)
+- Solves the "End-of-Session Paradox" (agents getting rate-limited or context-compacted without saving state).
+- Developers and agents drop micro-deltas (`operon checkpoint "..."`) every 2–3 turns.
+- Checkpoints append to local session WAL in `<2ms` without requiring full-file rewrites.
+- Teammates run `operon session --team` on shared branches to immediately inherit in-flight context and next steps.
+
+### Feature 5: Distributed Team Sync Bridge (`operon sync`)
+- Bridges local developer environments to the shared team persistence layer (YugabyteDB Meko).
+- **Verification Precedes Persistence:** Only code and invariants that pass all local verification gates (Exit Code `0`) can be published to the shared team store.
+- **Local Hash Cache:** Provides sub-15ms reads for local agents and acts as the real-time context bridge across team members.
+
+---
+
+## 4. End-to-End Governance Data Flow
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Dev as Developer / Agent
-    participant Host as Operon CLI (Host CPU)
-    participant Cache as Local OKF Cache (.operon/)
-    participant Git as Git Working Tree
-    participant Meko as YugabyteDB Meko (Datapack)
+    actor DevA as Developer A (Cursor)
+    participant HostA as Operon CLI (Dev A Machine)
+    participant TeamDB as Shared Persistence (YugabyteDB Meko)
+    participant HostB as Operon CLI (Dev B Machine)
+    actor DevB as Developer B (Claude Code)
 
-    Note over Host,Meko: Phase 1: Boot & Cache Sync
-    Host->>Meko: Check Datapack Invariants Hash (artifact_get)
-    alt Cache Miss or Stale
-        Meko-->>Host: Raw Invariant JSON
-        Host->>Cache: Compile & Store as OKF v0.3 Markdown
-    else Cache Hit (SHA-256 match)
-        Host->>Cache: Read local OKF (<5ms, 0 Meko quota spent)
-    end
+    Note over DevA,HostA: 1. Local Policy Enforcement
+    DevA->>HostA: Implements feature in src/auth/
+    DevA->>HostA: npx operon verify
+    HostA-->>DevA: Exit 0 (All quality gates passed)
 
-    Note over Dev,Host: Phase 2: Autonomous In-Flight Execution
-    Dev->>Git: Modifies src/auth/token.ts
-    Dev->>Host: npx operon check-invariants
-    Host->>Git: git diff --name-only
-    Host->>Cache: Resolve OKF entries matching src/auth/**
-    alt Invariant Violated (e.g., used '==' instead of constant-time)
-        Host-->>Dev: Exit Code 1 (FAILED: AUTH-01 violated in token.ts)
-    else Invariant Respected
-        Host-->>Dev: Exit Code 0 (PASS: All spatial invariants satisfied)
-    end
+    Note over HostA,TeamDB: 2. Governed Sync to Team
+    DevA->>HostA: npx operon sync --push
+    HostA->>TeamDB: Push verified invariant + decision ledger
+    TeamDB-->>HostA: Persisted in shared team datapack
 
-    Note over Dev,Host: Phase 3: Continuous Checkpointing
-    Dev->>Host: npx operon checkpoint "Fixed token verification timing leak"
-    Host->>Cache: Append Delta to session.json (Write-Ahead Log)
-
-    Note over Dev,Meko: Phase 4: Deterministic Push to Meko
-    Dev->>Host: npx operon verify
-    Host->>Git: Check blast radius, file ceilings, debug artifacts
-    Host-->>Dev: Exit Code 0 (All gates passed)
+    Note over HostB,DevB: 3. Team-Wide Automatic Inheritance
+    DevB->>HostB: npx operon sync --pull
+    HostB->>TeamDB: Check hash & pull latest team invariants
+    HostB-->>HostB: Update local OKF cache (.operon/)
     
-    Dev->>Host: npx operon sync --push
-    Host->>Meko: artifact_put (Sync operon-invariants.json to <team>-build)
-    Host->>Meko: memory_add + memory_promote (Push verified decision for Check T)
-    Meko-->>Host: Stored in YugabyteDB (Promoted)
+    DevB->>HostB: Modifies src/auth/token.ts
+    DevB->>HostB: npx operon check-invariants
+    HostB-->>DevB: Evaluates AUTH-01 (Strict timing comparison required)
+    Note over DevB: Dev B's agent automatically conforms to Dev A's verified invariant!
 ```
 
 ---
 
-## 4. MVP Command Reference
+## 5. CLI Command Reference
 
-All commands run via `npx operon <command>` on the host machine.
-
-### Core Developer & Agent Commands:
-
-1. **`operon init`**
-   - Creates `.operon/` directory and config (`config.json`).
-   - Scans active workspace for agent harnesses (`.cursorrules`, `CLAUDE.md`, `AGENTS.md`).
-   - Injects the non-invasive 2-line trampoline:
-     ```markdown
-     <!-- OPERON TRAMPOLINE START -->
-     Before modifying code or completing tasks, verify constraints with: `npx operon check-invariants`
-     Before marking tasks complete, verify deterministic exit gates with: `npx operon verify`
-     <!-- OPERON TRAMPOLINE END -->
-     ```
-
-2. **`operon check-invariants`**
-   - Runs `git diff --name-only` (or staged diff).
-   - Scans `operon/knowledge/*.md` for matching `paths: [...]` globs.
-   - Parses `entries:` tuples and checks triggers / AST patterns.
-   - **Exit 0:** All active file invariants pass.
-   - **Exit 1:** Outputs exact invariant ID, reason, and required fix. Blocks execution.
-
-3. **`operon verify`**
-   - **Gate A (Blast Radius):** Checks net lines added against configurable project threshold.
-   - **Gate B (File Line Ceiling):** Flags any modified file exceeding configured policy (e.g., >300 lines).
-   - **Gate C (Sanitary Cleanup):** Scans git diff for temporary debug markers (`console.log`, `print(`, `debugger`).
-   - **Exit 0 / Exit 1** with machine-parseable error messages.
-
-4. **`operon checkpoint "<message>"`**
-   - Appends a micro-entry to `.operon/session.json` (WAL format) with timestamp, branch, and author.
-   - Takes `<2ms`. Agent does not need to read the previous session file.
-
-5. **`operon session [--summary|--latest]`**
-   - Prints the current in-flight session status, completed checkpoints, and active branch context.
-
-6. **`operon sync [--push|--pull]`**
-   - **`--pull`:** Connects to Meko's `<team>-build` datapack, checks artifact hashes. If updated, pulls invariants into local OKF format.
-   - **`--push`:** Verifies local state with `verify`. If green, uploads `operon-invariants.json` via `artifact_put` and promotes logged decisions via `memory_promote`.
-
-7. **`operon bench` (The Hackathon Demo Weapon)**
-   - Prints an instant side-by-side terminal comparison:
-     - **Vanilla Meko MCP:** Token cost (~18,000 prompt tokens/turn), Latency (~3.2s), Gate enforcement (None/Passive text).
-     - **Operon + Meko:** Token cost (<40 prompt tokens/turn), Latency (<15ms), Gate enforcement (Deterministic Exit 0/1).
+| Command | Scope | Purpose |
+| :--- | :--- | :--- |
+| `operon init` | Project | Binds project, creates `.operon/`, and injects universal governance trampolines. |
+| `operon check-invariants` | Governance | Lints active git diff against spatial OKF invariant triggers. Exits `1` on violation. |
+| `operon verify` | Gate | Evaluates net LOC blast radius, file line ceilings, and sanitary code. Exits `0` or `1`. |
+| `operon checkpoint "<msg>"` | Continuity | Appends continuous delta to local session WAL. |
+| `operon session [--team]` | Continuity | Resolves in-flight state and latest teammate milestones on the active branch. |
+| `operon sync [--push\|--pull]` | Team Sync | Bi-directionally syncs verified invariants and decisions with shared team persistence. |
+| `operon bench` | Audit | Runs efficiency benchmark comparing raw MCP overhead vs. Operon-governed execution. |
 
 ---
 
-## 5. Meko Interaction Rules (Strict Containment)
-
-To preserve Operon's integrity and avoid getting trapped in Meko's schema:
-
-1. **No Direct Agent-to-Meko MCP Exposure:** The LLM coding agent NEVER connects directly to Meko's FastMCP server. It only invokes Operon CLI.
-2. **Artifact as Source of Invariants:** Invariants are compiled into a single canonical JSON manifest:
-   ```json
-   {
-     "version": "0.3",
-     "updated_at": 1793425900,
-     "hash": "sha256-...",
-     "invariants": [
-       {
-         "id": "AUTH-01",
-         "paths": ["src/auth/**"],
-         "trigger": "verifySignature|compareTokens",
-         "rule": "Never use == for token comparison. Use crypto.timingSafeEqual()."
-       }
-     ]
-   }
-   ```
-   Stored in Meko using `artifact_put(key: "operon-invariants.json", datapack_id: "<team>-build")`.
-3. **Decisions as Promoted Memories (Check T Compliance):**
-   - When a developer or agent finishes a significant feature, `operon checkpoint --promote` invokes `memory_add` then `memory_promote`.
-   - Tags each memory with `agent_id: "operon:<client>"` and links to the datapack.
-   - Seed script pre-populates $\ge 10$ promoted decisions from 2 distinct teammate IDs to lock in the 10/10 points for Check T before the pitch.
-
----
-
-## 6. Implementation Plan & Directory Structure
+## 6. Directory Layout
 
 ```text
 operon/
 ├── bin/
-│   └── operon.js             # CLI entry executable (#/usr/bin/env node)
+│   └── operon.js             # Global executable entrypoint
 ├── src/
-│   ├── cli.ts                # Command router (commander / parseArgs)
-│   ├── gates/
-│   │   ├── blast-radius.ts   # Git diff LOC checker
-│   │   ├── file-ceiling.ts   # Max line count linter
-│   │   ├── sanitary.ts       # Debug statement scanner
+│   ├── cli.ts                # Command router and CLI controller
+│   ├── gates/                # Deterministic Quality Gates
+│   │   ├── blast-radius.ts   # Diff line limits & dependency audit
+│   │   ├── file-ceiling.ts   # Modular file line policies
+│   │   ├── sanitary.ts       # Debug marker detection
 │   │   └── invariants.ts     # Spatial path glob & trigger evaluator
-│   ├── storage/
-│   │   ├── okf-parser.ts     # YAML frontmatter & markdown parser
-│   │   ├── wal-session.ts    # Continuous append-only session tracker
+│   ├── storage/              # Local Governance Store
+│   │   ├── okf-parser.ts     # OKF v0.3 Markdown/YAML parser
+│   │   ├── wal-session.ts    # Write-Ahead Log session engine
 │   │   └── cache.ts          # Local SHA-256 hash cache manager
-│   ├── meko/
-│   │   ├── client.ts         # Lean MCP client (JSON-RPC over stdio / HTTP)
-│   │   └── bridge.ts         # artifact_put/get + memory_promote wrappers
+│   ├── meko/                 # Shared Team Persistence Bridge
+│   │   ├── client.ts         # Lightweight MCP client
+│   │   └── bridge.ts         # Invariants manifest & decision sync
 │   └── utils/
-│       └── git.ts            # Fast git CLI wrapper (rev-parse, diff)
-├── scripts/
-│   └── seed-check-t.ts       # Populates 10 promoted memories for Check T
-├── knowledge/
-│   └── invariants.md         # Default sample OKF v0.3 invariants
-├── package.json
-├── tsconfig.json
+│       └── git.ts            # High-performance git wrapper
+├── knowledge/                # Versioned OKF Invariants
+│   └── invariants.md         # Baseline team invariant rules
+├── SPEC.md                   # Full Operon Specification
+├── meko.md                   # Team Persistence Integration Spec
 └── mvp.md                    # This document
 ```
-
----
-
-## 7. Hackathon Scorecard Alignment
-
-| Rubric Item | Points | How Operon MVP Delivers |
-| :--- | :--- | :--- |
-| **Track A: "Build AI that remembers"** | 50 | Connects distributed YugabyteDB persistent memory to agents across machines and teammates via `<team>-build` datapack. |
-| **Requirement A1: Meko ON vs OFF Demo** | 30 | `operon bench` + live demo showing an agent making an invariant mistake without Operon vs Operon blocking it with Exit Code 1. |
-| **Check T: $\ge 10$ Promoted Decisions** | 10 | Seeded and verified in `<team>-build` across 2 agents via `seed-check-t.ts`. |
-| **Meko Feature Proposal** | 10 | "Spatial Path Scoping & Execution Governor for Meko Datapacks" submitted as a 2-page document. |
-| **Total** | **100** | Full compliance without compromising Operon's architecture. |
